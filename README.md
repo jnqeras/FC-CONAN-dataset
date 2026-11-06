@@ -16,12 +16,14 @@ FC-CONAN was designed to make this source of evaluation bias measurable. Startin
 
 **Important distinction:** 5,805 is the number of candidate combinations considered in the annotation design, **not** the number of rows in each released CSV. After annotation and quality-control exclusions, the largest published partition (Bronze) contains **3,997 rows**.
 
+**Release-provenance note:** The publicly released Bronze CSV contains **130 distinct CN identifiers/texts**, while the annotation design in the paper describes **129 selected CNs**. This difference has not yet been reconciled against the original selection/export artifacts; the data have not been altered. See the [partition documentation](fc_conan_partitions/README.md#methodological-scope-and-release-note).
+
 The work contributes:
 
 - A systematically paired, human-annotated HS–CN evaluation resource for a finite English-language subset.
 - A two-stage annotation and validation procedure, with partitions that expose different quality–coverage trade-offs.
 - An evaluation of how annotation sparsity affects counter-narrative retrieval metrics across twelve ranking approaches.
-- Public partition data and experiment input splits that support independent analysis.
+- Released annotation tables and retrieval-experiment input files that researchers can inspect and analyze independently.
 
 This is a collaborative scientific contribution by the authors listed in the [citation](#citation), not an individually authored dataset.
 
@@ -31,7 +33,7 @@ As described in Section 3 of the paper:
 
 1. The study selected 45 English HS messages from CONAN and constructed a CN pool using semantically related counter-narratives retrieved with Sentence-BERT. From 133 distinct retrieved CNs, 129 were selected for the annotation design.
 2. **Nine annotators** independently assessed the 5,805 candidate HS–CN combinations for appropriateness, with overlapping judgments and adjudication of disagreements. Uncertain or unresolved cases were excluded, leaving **5,032 adjudicated pairs**.
-3. **Four independent validators** reviewed 4,000 of those pairs. Three pairs were skipped, leaving the **3,997 records** retained in Bronze. The more selective partitions retain subsets according to agreement and validation criteria.
+3. **Four independent validators** reviewed 4,000 of those pairs. Validators were allowed to skip content they found distressing; three pairs were skipped for this reason, leaving **3,997 records** in Bronze. All retained pairs were reviewed, whether or not a validator confirmed their original annotation. More selective partitions retain subsets according to agreement and validation criteria.
 
 An *appropriate* label is a human judgment about a particular counter-narrative **for a particular HS message**. It is not an inherent property of the CN in isolation. The validation flag records whether the annotation was confirmed; it is distinct from the appropriateness label.
 
@@ -43,12 +45,12 @@ The partitions are **nested**, not four independent train/test splits.
 | --- | ---: | ---: | ---: | --- |
 | **Diamond** | 551 | 35 | 516 | At least two annotators, unanimous agreement, and validator confirmation |
 | **Gold** | 663 | 54 | 609 | At least two annotators; adjudicated label confirmed by a validator |
-| **Silver** | 3,580 | 431 | 3,149 | Includes confirmed single-annotator judgments in addition to Gold |
+| **Silver** | 3,580 | 431 | 3,149 | Includes Gold plus single-annotator judgments **confirmed by an independent validator** |
 | **Bronze** | 3,997 | 702 | 3,295 | Includes Silver and judgments not confirmed during validation |
 
 Counts are from Table 1 of the published paper. The quality criteria are described in Section 4.1. In particular, **Bronze includes 417 records not confirmed by validators**; these should not be confused with the 3,295 records labeled *not appropriate*.
 
-Choose Diamond or Gold for higher agreement requirements, Silver for a larger validator-confirmed set, and Bronze when coverage is important and the validation flag can be taken into account.
+Choose Diamond or Gold for stronger annotator-agreement criteria; Silver for more examples **all confirmed by a validator**; or Bronze for the broadest released coverage, while explicitly distinguishing the **3,580 confirmed** and **417 not-confirmed** records. Every Bronze record was assessed during validation.
 
 ## Repository structure
 
@@ -71,7 +73,7 @@ FC-CONAN-dataset/
 - **Annotation partitions:** HS text, CN text, appropriateness decision, validator confirmation, source metadata, and individual annotator judgments. See the [partition field reference](fc_conan_partitions/README.md).
 - **Recommender experiment data:** a CONAN-derived training-data file, a Bronze-derived candidate-CN catalogue, and a Bronze-derived HS query list. See the [experiment field reference](recommender_experiment_data/README.md).
 
-**Column-name note:** Some names in the partition field reference are simplified descriptions, **not literal CSV headers**. In the released partition CSVs, examples of actual headers include `hate speech`, `counternarrative`, `Appropriate counternarrative (1) or non appropriate (0)`, and `Valid (1) / Non Valid (0) annotation`. Read the CSV header row rather than assuming aliases such as `hate_speech` or `is_valid` exist.
+**Column-name note:** The updated [partition field reference](fc_conan_partitions/README.md) lists the **literal CSV headers**, including `hate speech`, `counternarrative`, `Appropriate counternarrative (1) or non appropriate (0)`, and `Valid (1) / Non Valid (0) annotation`. The experiment input files use different text headers (`hateSpeech` and `counterSpeech`).
 
 ## Quick start: inspect the released data
 
@@ -90,12 +92,12 @@ for name in ("diamond", "gold", "silver", "bronze"):
     with path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     appropriate = sum(row[label_column] == "1" for row in rows)
-    confirmed = sum(row[validation_column] == "1" for row in rows)
-    print(f"{name:7} rows={len(rows):4} appropriate={appropriate:3} confirmed={confirmed:4}")
+    validator_confirmed = sum(row[validation_column] == "1" for row in rows)
+    print(f"{name:7} rows={len(rows):4} appropriate={appropriate:3} validator_confirmed={validator_confirmed:4}")
 PY
 ```
 
-For further work, use `counternarrative` and `hate speech` as text fields and consult the column references for the original CONAN metadata and the individual annotation columns. The CSVs are data artifacts; **this repository does not currently provide a complete training/evaluation pipeline or a command for reproducing every reported result**.
+The `validator_confirmed` count indicates **agreement between the original annotation and an independent validator**; it does **not** count appropriate pairs. These values match Table 2 in the paper (551, 663, 3,580, and 3,580). Use `counternarrative` and `hate speech` as text fields in partition CSVs; consult the [partition field reference](fc_conan_partitions/README.md) for the full schema. This repository publishes the **data and experiment input splits**, not the complete code for rerunning the twelve reported ranking systems.
 
 ## Retrieval experiments: what the paper establishes
 
@@ -103,15 +105,15 @@ Section 4.3 evaluates **twelve retrieval/ranking approaches** using a fixed cata
 
 The paper reports Hit Ratio@10, MRR@10, NDCG@10, and MAP@10, among other measures. Its central observation is that **more complete relevance judgments reveal suitable recommendations missed by sparse labels**. For the specific candidate/query combinations used in the study, the original CONAN annotations alone mark no pairs as appropriate and therefore produce zero scores; this is **not** a general claim that every CONAN evaluation has zero performance.
 
-Across the paper's reported comparisons, embedding-based rankers generally show stronger average scores and greater stability than the lexical baselines. Refer to **Figures 1–2 and Table 4 in the paper** for the reported values and their precise aggregation; the figures are not reproduced here. The three CSVs in `recommender_experiment_data/` are experiment inputs, **not saved model outputs or executable benchmark code**.
+Across the paper's reported comparisons, embedding-based rankers generally show stronger average scores and greater stability than the lexical baselines. Refer to **Figures 1–2 and Table 4 in the paper** for the reported values and their precise aggregation; the figures are not reproduced here. The three CSVs in `recommender_experiment_data/` are experiment inputs, **not saved model outputs or executable benchmark code**. The released 100-CN candidate catalogue does not include every CN appearing in the full Bronze CSV; see the [experiment input notes](recommender_experiment_data/README.md#separation-of-training-data-and-evaluation-inputs) for a file-level comparison.
 
 ## Ethics and limitations
 
 - **Harmful language:** Files contain potentially distressing hate-speech material. Handle examples carefully; avoid reproducing raw hateful content in demonstrations, logs, or interfaces where it is unnecessary.
-- **Research scope:** Only a selected English-language portion of CONAN is studied; the work does not exhaustively annotate the full multilingual CONAN dataset.
+- **Research scope:** The work annotates selected English-language items, not the complete multilingual CONAN dataset (see the paper, §1 and §3).
 - **Subjective labels:** Appropriateness depends on context and human judgment. Differences in annotator backgrounds and moderate initial agreement limit how literally any single label should be interpreted.
 - **Quality levels:** Bronze retains records whose validation did not confirm their annotations. Prefer higher-confidence partitions when appropriate and report the partition used.
-- **Dual use:** The data should not be repurposed to generate or amplify hate speech. A retrieval label is not a guarantee of the safety or real-world effectiveness of a response.
+- **Dual use:** The data should not be repurposed to generate or amplify hate speech. An *appropriate* annotation describes a research judgment for an HS–CN pair; it is not a measurement of how people would respond to that counter-narrative in real-world settings.
 - **Reproduction:** Published data and input splits do not by themselves reproduce the model evaluations, and reported results should not be generalized beyond the experimental protocol.
 
 For detailed methodology, limitations, acknowledgments, and results, consult the published paper.
@@ -131,7 +133,7 @@ If FC-CONAN is relevant to your research, please cite the **published workshop p
 }
 ```
 
-The [arXiv version](https://arxiv.org/abs/2601.01350) is also available. The paper was published as a **workshop short paper**, not as a main-track KR conference paper.
+The [arXiv version](https://arxiv.org/abs/2601.01350) is also available. The paper appeared in the **NeLaMKRR 2025 workshop proceedings**.
 
 ## License, usage, and attribution
 
